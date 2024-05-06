@@ -1,0 +1,289 @@
+# Проект 3
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+# Инициализация параметров
+RECOVERY_RATE_OF_RESOURCES = 0.01  # Скорость восстановления ресурсов
+TIME_STEPS_FOR_BACTERIA_DIVISION = 10  # Время шагов для деления бактерий
+SCREEN_SIZE = 100  # Размер экрана
+INITIAL_CONCENTRATION_OF_RESOURCES = 1.0  # Начальная концентрация ресурсов
+SIZE_OF_BACTERIA = 1  # Размер бактерии (влияет на радиус потребления ресурсов)
+SEARCH_RADIUS = 5  # Радиус поиска ресурсов бактериями
+MINIMUM_RESOURCE_THRESHOLD = 0.1  # Порог смерти бактерий при недостатке ресурсов
+
+# Инициализация распределения ресурсов
+R = np.full((SCREEN_SIZE, SCREEN_SIZE), INITIAL_CONCENTRATION_OF_RESOURCES)
+
+# Класс Бактерия
+class Bacteria:
+    def __init__(self, x, y, color, consumption_rate):
+        # Инициализация координат, цвета и скорости потребления бактерии
+        self.x = x
+        self.y = y
+        self.color = color
+        self.consumption_rate = consumption_rate
+        self.active = True  # Флаг активности бактерии
+        self.split_counter = 0  # Счетчик для отсчета до деления
+
+    def find_nearest_resource(self):
+        # Найти ближайший ресурс
+        resource_direction = np.array([0, 0])
+        min_distance = np.inf
+        for dx in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
+            for dy in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
+                if dx**2 + dy**2 <= SEARCH_RADIUS**2:  # Убедиться, что в пределах радиуса поиска
+                    nx, ny = self.x + dx, self.y + dy
+                    if 0 <= nx < SCREEN_SIZE and 0 <= ny < SCREEN_SIZE:
+                        distance = np.sqrt(dx**2 + dy**2)
+                        if R[nx, ny] > R[self.x, self.y] and distance < min_distance:
+                            resource_direction = np.array([dx, dy])
+                            min_distance = distance
+        return resource_direction
+
+    def move(self):
+        # Переместиться к ближайшему ресурсу
+        direction = self.find_nearest_resource()
+        # Обновить координаты бактерии, учитывая границы экрана
+        self.x = max(0, min(SCREEN_SIZE - 1, self.x + direction[0]))
+        self.y = max(0, min(SCREEN_SIZE - 1, self.y + direction[1]))
+
+    def consume_resource(self):
+        # Потреблять ресурсы вокруг себя
+        for x in range(max(0, self.x - SIZE_OF_BACTERIA), min(SCREEN_SIZE, self.x + SIZE_OF_BACTERIA)):
+            for y in range(max(0, self.y - SIZE_OF_BACTERIA), min(SCREEN_SIZE, self.y + SIZE_OF_BACTERIA)):
+                # Вычесть потребляемую величину ресурса, учитывая размер бактерии
+                R[x, y] -= self.consumption_rate
+                # Убедиться, что ресурс не становится меньше нуля
+                R[x, y] = max(0, R[x, y])
+
+    def split(self):
+        # Разделиться, если счетчик деления достиг TIME_STEPS_FOR_BACTERIA_DIVISION и уровень ресурсов достаточно высокий
+        if self.split_counter >= TIME_STEPS_FOR_BACTERIA_DIVISION and R[self.x, self.y] > 0.5:
+            bacteria.append(Bacteria(self.x, self.y, self.color, self.consumption_rate))
+            self.split_counter = 0  # Сбросить счетчик после деления
+        else:
+            self.split_counter += 1  # Инкремент счетчика деления
+
+    def update(self):
+        # Обновить состояние бактерии
+        if R[self.x, self.y] < MINIMUM_RESOURCE_THRESHOLD:
+            self.active = False  # Деактивировать бактерию, если ресурсы ниже порога
+        if self.active:
+            self.move()  # Двигаться к ближайшему ресурсу
+            self.consume_resource()  # Потреблять ресурсы
+            self.split()  # Разделиться, если условия выполнены
+
+# Инициализация популяции бактерий с различными координатами, цветами и скоростями потребления
+bacteria = [
+    Bacteria(10, 10, 'red', 0.11),
+    Bacteria(90, 10, 'blue', 0.12),
+    Bacteria(10, 90, 'green', 0.13),
+    Bacteria(90, 90, 'purple', 0.14),
+    Bacteria(50, 50, 'orange', 0.1)
+]
+
+# Функция обновления анимации
+def update(frame_num, img, R, bacteria):
+    # Очистить предыдущую рамку
+    ax.clear()
+    ax.set_title("Симуляция Бактерий")  # Заголовок анимации
+
+    # Восстановление ресурсов на экране
+    R += RECOVERY_RATE_OF_RESOURCES
+    # Ограничить концентрацию ресурсов на максимальном уровне
+    R[R > INITIAL_CONCENTRATION_OF_RESOURCES] = INITIAL_CONCENTRATION_OF_RESOURCES
+
+    # Обновление состояния каждой бактерии
+    new_bacteria = []
+    for bacterium in bacteria:
+        bacterium.update()
+        # Если бактерия активна, добавить ее в новый список и отобразить на экране
+        if bacterium.active:
+            new_bacteria.append(bacterium)
+            ax.plot(bacterium.x, bacterium.y, color=bacterium.color, marker='o')
+    # Обновить список бактерий новыми активными бактериями
+    bacteria = new_bacteria
+
+    # Обновить изображение распределения ресурсов
+    img.set_data(R)
+    ax.imshow(R, cmap='viridis', interpolation='nearest')
+
+# Создание графического окна и инициализация распределения ресурсов на экране
+fig, ax = plt.subplots()
+img = ax.imshow(R, cmap='viridis', interpolation='nearest')
+# Создание анимации, вызов update функцию для каждой рамки
+ani = animation.FuncAnimation(fig, update, fargs=(img, R, bacteria), frames=100000, interval=10)
+
+# Показать анимацию
+plt.show()
+
+# Здание 13
+def read_fasta(file_path):
+    # Читает файл multiFASTA и возвращает список последовательностей
+    sequences = []
+    with open(file_path, 'r') as file:
+        sequence = ''
+        for line in file:
+            line = line.strip()
+            if line.startswith('>'):
+                if sequence:
+                    sequences.append(sequence)
+                    sequence = ''
+            else:
+                sequence += line
+        if sequence:  # Добавить последнюю последовательность
+            sequences.append(sequence)
+    return sequences
+
+def translate_dna(dna_sequence):
+    # Переводит ДНК-последовательность в белок-последовательность
+    # Определение таблицы преобразования ДНК в белок
+    codon_table = {
+        'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
+        'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
+        'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
+        'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
+        'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
+        'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
+        'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
+        'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
+        'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
+        'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
+        'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
+        'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
+        'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
+        'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
+        'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
+        'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
+    }
+    protein_sequence = ""
+    for i in range(0, len(dna_sequence), 3):
+        codon = dna_sequence[i:i+3]
+        protein_sequence += codon_table.get(codon, 'X')  # Неизвестная аминокислота
+    return protein_sequence
+
+def count_substitutions(seq1, seq2):
+    # Вычисляет синонимы и несинонимы замены между двумя последовательностями, 
+    # исключая полностью идентичные кодоны
+    synonymous = 0
+    nonsynonymous = 0
+
+    for i in range(0, len(seq1), 3):
+        codon1 = seq1[i:i+3]
+        codon2 = seq2[i:i+3]
+
+        # Пропустить полностью идентичные кодоны, не считая их за замены
+        if codon1 == codon2:
+            continue
+
+        amino_acid1 = translate_dna(codon1)
+        amino_acid2 = translate_dna(codon2)
+
+        # Убедиться, что codon2 может быть переведен и отличается от codon1
+        if amino_acid2 != '_':
+            if amino_acid1 == amino_acid2:
+                synonymous += 1
+            else:
+                nonsynonymous += 1
+
+    return synonymous, nonsynonymous
+
+# Чтение файла multiFASTA
+file_path = 'example.fasta'
+sequences = read_fasta(file_path)
+
+# Предположим, что мы сравниваем только первые две последовательности
+seq1, seq2 = sequences[:2]
+
+# Перевод и вычисление замен
+synonymous, nonsynonymous = count_substitutions(seq1, seq2)
+
+# Вычисление отношения несинонимы замен к синонимы замен (dN/dS)
+if synonymous > 0:
+    dN_dS_ratio = nonsynonymous / synonymous
+else:
+    dN_dS_ratio = float('inf')  # Если нет синонимы замен, отношение бесконечное
+
+# Вывод результата
+print(f"Синонимичные замены (dS): {synonymous}")
+print(f"Несинонимы замены (dN): {nonsynonymous}")
+print(f"Отношение dN/dS: {dN_dS_ratio:.2f}")
+
+
+# Задание 14
+# Чтение файла FASTA
+def read_fasta(file_path):
+    fasta_dict = {}
+    with open(file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('>'):
+                header = line[1:]
+                fasta_dict[header] = ''
+            else:
+                fasta_dict[header] += line
+    return fasta_dict
+
+# Чтение файла VCF
+def read_vcf(file_path):
+    variants = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            if not line.startswith('#'):
+                parts = line.strip().split()
+                chrom, pos, ref, alt = parts[0], int(parts[1]), parts[3], parts[4]
+                variants.append((chrom, pos, ref, alt))
+    return variants
+
+# Перевод ДНК в белок
+def translate_dna(dna_sequence):
+    codon_table = {
+        'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
+        'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
+        'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
+        'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
+        'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
+        'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
+        'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
+        'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
+        'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
+        'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
+        'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
+        'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
+        'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
+        'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
+        'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
+        'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
+    }
+    protein_sequence = ""
+    for i in range(0, len(dna_sequence), 3):
+        codon = dna_sequence[i:i+3]
+        protein_sequence += codon_table.get(codon, 'X')  # Неизвестная аминокислота
+    return protein_sequence
+
+# Определение типа замены
+def determine_variant_type(ref_seq, alt_seq):
+    ref_protein = translate_dna(ref_seq)
+    alt_protein = translate_dna(alt_seq)
+    if ref_protein == alt_protein:
+        return 'Синонимичная'
+    elif alt_protein == '_':
+        return 'Нонсенс'
+    else:
+        return 'Миссенс'
+
+# Начало выполнения скрипта
+fasta_file = 'lizi2.fasta'
+vcf_file = 'lizi2.vcf'
+fasta_dict = read_fasta(fasta_file)
+variants = read_vcf(vcf_file)
+
+for chrom, pos, ref, alt in variants:
+    if chrom in fasta_dict:
+        ref_seq = fasta_dict[chrom][pos-1:pos+len(ref)-1]
+        alt_seq = ref_seq[:len(ref_seq)-len(ref)] + alt
+        variant_type = determine_variant_type(ref_seq, alt_seq)
+        print(f'{chrom}:{pos} {ref}>{alt} - {variant_type}')
+    else:
+        print(f'Хромосома {chrom} не найдена в файле FASTA.')
